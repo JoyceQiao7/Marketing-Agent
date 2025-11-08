@@ -46,7 +46,6 @@ An automated system that crawls social media platforms (Quora, Reddit, etc.) for
 ### Database
 - **Primary Database**: Supabase (PostgreSQL-based)
 - **Cache Layer**: Redis
-- **Alternative Options**: PostgreSQL (self-hosted), MongoDB
 
 ### Frontend (Optional Dashboard)
 - **Framework**: React + TypeScript / Next.js

@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Redis for Celery broker and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: mulan-redis-prod
+    restart: always
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mulan-network
+
+  # FastAPI backend
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mulan-api-prod
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.production
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --workers 4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mulan-network
+
+  # Celery worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mulan-celery-worker-prod
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    command: celery -A backend.tasks.celery_app worker --loglevel=info --concurrency=4
+    networks:
+      - mulan-network
+
+  # Celery beat scheduler
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mulan-celery-beat-prod
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    command: celery -A backend.tasks.celery_app beat --loglevel=info
+    networks:
+      - mulan-network
+
+volumes:
+  redis_data:
+
+networks:
+  mulan-network:
+    driver: bridge
+

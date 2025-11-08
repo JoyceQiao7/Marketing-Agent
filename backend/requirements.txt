@@ -1,0 +1,49 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Web Scraping
+praw==7.7.1
+beautifulsoup4==4.12.2
+requests==2.31.0
+selenium==4.15.2
+webdriver-manager==4.0.1
+
+# HTTP Client
+httpx==0.25.1
+
+# Task Queue
+celery==5.3.4
+redis==5.0.1
+
+# Database
+supabase==2.0.3
+postgrest==0.13.0
+
+# Utilities
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+
+# Monitoring
+sentry-sdk==1.38.0
+
+# Logging
+loguru==0.7.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx-mock==0.1.0
+
+# Code Quality
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.12.0
+
+# Scheduling
+APScheduler==3.10.4
+
