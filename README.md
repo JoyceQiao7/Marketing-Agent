@@ -7,16 +7,16 @@ An automated system that crawls social media platforms (Quora, Reddit, etc.) for
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
+- [Quick Start (15 Minutes)](#quick-start-15-minutes)
+- [What You Need to Customize](#what-you-need-to-customize)
 - [Database Schema](#database-schema)
 - [System Workflow](#system-workflow)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Development](#development)
+- [API Endpoints](#api-endpoints)
+- [Running the Application](#running-the-application)
+- [Testing](#testing)
 - [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
+
+---
 
 ## Features
 
@@ -29,77 +29,61 @@ An automated system that crawls social media platforms (Quora, Reddit, etc.) for
 - 🛡️ **Rate Limiting**: Respects platform API limits
 - 🔍 **Error Tracking**: Comprehensive logging and monitoring
 
+---
+
 ## Tech Stack
 
-### Backend/Crawler
+### Backend
 - **Language**: Python 3.11+
-- **Web Scraping**: 
-  - `praw` (Python Reddit API Wrapper)
-  - `quora-api` or Selenium for Quora
-  - `beautifulsoup4` + `requests`
-- **Task Scheduling**: 
-  - `celery` + Redis for distributed task queue
-  - `APScheduler` for cron-like scheduling
-- **API Framework**: FastAPI
-- **AI Agent Integration**: `httpx` for Mulan Agent communication
+- **Framework**: FastAPI
+- **Task Queue**: Celery + Redis
+- **Database**: Supabase (PostgreSQL)
+- **Web Scraping**: PRAW (Reddit), Selenium (Quora)
+- **Monitoring**: Loguru, Sentry
 
-### Database
-- **Primary Database**: Supabase (PostgreSQL-based)
-- **Cache Layer**: Redis
-
-### Frontend (Optional Dashboard)
-- **Framework**: React + TypeScript / Next.js
-- **UI Library**: Tailwind CSS + shadcn/ui
+### Frontend (Optional)
+- **Framework**: Next.js + TypeScript
+- **UI Library**: Tailwind CSS
 - **Features**: Monitoring, analytics, manual intervention
 
-### Infrastructure & DevOps
+### Infrastructure
 - **Containerization**: Docker + Docker Compose
-- **Deployment**: Cloud Run / AWS ECS (backend), Vercel/Netlify (frontend)
-- **Monitoring**: Sentry for errors, Grafana for metrics
-- **Version Control**: Git
+- **Deployment**: Cloud Run / AWS ECS (backend), Vercel (frontend)
+
+---
 
 ## Project Structure
 
 ```
-ai-video-qa-system/
+Mulan-Marketing-Agent/
 ├── backend/
 │   ├── crawler/
-│   │   ├── __init__.py
 │   │   ├── base_crawler.py          # Abstract crawler class
-│   │   ├── reddit_crawler.py        # Reddit-specific implementation
-│   │   ├── quora_crawler.py         # Quora-specific implementation
-│   │   └── crawler_manager.py       # Orchestrates all crawlers
+│   │   ├── reddit_crawler.py        # Reddit implementation
+│   │   ├── quora_crawler.py         # Quora implementation
+│   │   └── crawler_manager.py       # Orchestrates crawlers
 │   ├── agent/
-│   │   ├── __init__.py
-│   │   ├── mulan_client.py          # Client to communicate with Mulan Agent
-│   │   ├── response_generator.py    # Formats and posts responses
-│   │   └── capability_checker.py    # Determines if question is answerable
+│   │   ├── mulan_client.py          # Mulan Agent API client
+│   │   ├── response_generator.py    # Response generation
+│   │   └── capability_checker.py    # Question analysis
 │   ├── database/
-│   │   ├── __init__.py
-│   │   ├── models.py                # SQLAlchemy/Pydantic models
-│   │   ├── supabase_client.py       # Supabase connection & queries
-│   │   └── migrations/              # Database migration scripts
+│   │   ├── models.py                # Pydantic models
+│   │   ├── supabase_client.py       # Database operations
+│   │   └── migrations/              # Migration scripts
 │   ├── api/
-│   │   ├── __init__.py
-│   │   ├── main.py                  # FastAPI app entry point
-│   │   ├── routes/
-│   │   │   ├── questions.py         # CRUD for questions
-│   │   │   ├── responses.py         # Response management
-│   │   │   └── analytics.py         # Statistics endpoints
+│   │   ├── main.py                  # FastAPI entry point
+│   │   ├── routes/                  # API endpoints
 │   │   └── dependencies.py          # Shared dependencies
 │   ├── tasks/
-│   │   ├── __init__.py
 │   │   ├── celery_app.py           # Celery configuration
-│   │   ├── crawl_tasks.py          # Scheduled crawling tasks
-│   │   └── response_tasks.py       # Auto-response tasks
+│   │   ├── crawl_tasks.py          # Crawling tasks
+│   │   └── response_tasks.py       # Response tasks
 │   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── logger.py               # Logging configuration
-│   │   ├── rate_limiter.py         # Rate limiting logic
+│   │   ├── logger.py               # Logging
+│   │   ├── rate_limiter.py         # Rate limiting
 │   │   └── deduplicator.py         # Duplicate detection
 │   ├── config/
-│   │   ├── __init__.py
-│   │   └── settings.py             # Environment variables & config
+│   │   └── settings.py             # Configuration
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/                        # Optional dashboard
@@ -112,8 +96,9 @@ ai-video-qa-system/
 │   ├── package.json
 │   └── Dockerfile
 ├── scripts/
-│   ├── setup_db.py                 # Initialize database schema
-│   └── seed_data.py                # Seed test data
+│   ├── setup_db.py                 # Database initialization
+│   ├── schema.sql                  # Supabase schema
+│   └── seed_data.py                # Test data
 ├── tests/
 │   ├── test_crawlers.py
 │   ├── test_agent.py
@@ -123,6 +108,166 @@ ai-video-qa-system/
 └── README.md
 ```
 
+---
+
+## Quick Start (15 Minutes)
+
+### Prerequisites
+
+- Python 3.11+
+- Docker & Docker Compose (recommended)
+- Supabase account
+- Reddit API credentials
+- Mulan Agent API access
+
+### 1. Clone and Setup
+
+```bash
+cd Mulan-Marketing-Agent
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+### 2. Configure Environment Variables
+
+**Required in `.env`:**
+```bash
+# Database
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+
+# Reddit API (get from https://www.reddit.com/prefs/apps)
+REDDIT_CLIENT_ID=your_client_id
+REDDIT_CLIENT_SECRET=your_secret
+REDDIT_USERNAME=your_bot_username
+REDDIT_PASSWORD=your_bot_password
+
+# Mulan Agent
+MULAN_AGENT_URL=your_mulan_agent_api_url
+MULAN_AGENT_API_KEY=your_api_key
+```
+
+### 3. Set Up Database
+
+1. Go to Supabase SQL Editor
+2. Copy and paste contents of `scripts/schema.sql`
+3. Click "Run"
+
+### 4. Start Services
+
+**Using Docker (Recommended):**
+```bash
+docker-compose up -d
+```
+
+This starts:
+- Redis (caching & task queue)
+- FastAPI server (port 8000)
+- Celery worker (background processing)
+- Celery beat (scheduler)
+- Flower (monitoring on port 5555)
+
+**Without Docker:**
+```bash
+# Terminal 1: Redis
+redis-server
+
+# Terminal 2: API
+cd backend
+pip install -r requirements.txt
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 3: Celery Worker
+cd backend
+celery -A tasks.celery_app worker --loglevel=info
+
+# Terminal 4: Celery Beat
+cd backend
+celery -A tasks.celery_app beat --loglevel=info
+```
+
+### 5. Test the System
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# View API docs
+open http://localhost:8000/docs
+
+# Trigger test crawl
+curl -X POST http://localhost:8000/api/crawl/reddit
+
+# Check questions
+curl http://localhost:8000/api/questions
+```
+
+---
+
+## What You Need to Customize
+
+### 🔴 CRITICAL (Must Change)
+
+#### 1. Mulan Agent API Integration
+**File:** `backend/agent/mulan_client.py` (Lines 26-90)
+
+Update the API payload and response parsing to match your Mulan Agent's actual API:
+
+```python
+# Current template - UPDATE THIS
+payload = {
+    "question": question_text,
+    "title": question_title,
+    "task": "analyze_capability"
+}
+```
+
+#### 2. Question Keywords
+**File:** `backend/crawler/reddit_crawler.py` (Line 135)
+
+Customize keywords for your specific niche:
+
+```python
+relevant_keywords = [
+    'your_product_name',
+    'your_use_case',
+    'your_industry_terms',
+    # Add your specific keywords
+]
+```
+
+#### 3. Subreddit Selection
+**File:** `.env`
+
+Choose relevant subreddits:
+
+```bash
+REDDIT_SUBREDDITS=your_niche_subreddit,another_relevant_sub
+```
+
+#### 4. Response Template
+**File:** `backend/agent/response_generator.py` (Line 60)
+
+Customize to match your brand voice:
+
+```python
+response_text = f"""
+{response_data.get("response_text")}
+
+Check out this workflow: {workflow_link}
+
+*Disclosure: I'm affiliated with [Your Product]*
+"""
+```
+
+### 🟡 RECOMMENDED
+
+- **Confidence Threshold** (`.env`): Adjust `MIN_CONFIDENCE_SCORE=0.7`
+- **Rate Limits** (`.env`): Fine-tune `MAX_REQUESTS_PER_MINUTE=30`
+- **Auto-Posting**: Keep `AUTO_POST_ENABLED=false` until thoroughly tested
+
+---
+
 ## Database Schema
 
 ### Tables
@@ -130,299 +275,315 @@ ai-video-qa-system/
 #### `questions`
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `platform` | ENUM | reddit, quora, etc. |
-| `post_id` | STRING | Unique per platform |
-| `title` | TEXT | Question title |
-| `content` | TEXT | Question body |
-| `author` | STRING | Username |
-| `url` | STRING | Original post URL |
-| `tags` | ARRAY | Related tags |
-| `upvotes` | INTEGER | Score/upvotes |
-| `status` | ENUM | pending, processing, answered, ignored |
-| `created_at` | TIMESTAMP | Original post date |
-| `crawled_at` | TIMESTAMP | When crawled |
+| id | UUID | Primary key |
+| platform | ENUM | reddit, quora, etc. |
+| post_id | STRING | Unique per platform |
+| title | TEXT | Question title |
+| content | TEXT | Question body |
+| author | STRING | Username |
+| url | STRING | Original post URL |
+| tags | ARRAY | Related tags |
+| upvotes | INTEGER | Score/upvotes |
+| status | ENUM | pending, processing, answered, ignored |
+| content_hash | STRING | For deduplication |
+| created_at | TIMESTAMP | Original post date |
+| crawled_at | TIMESTAMP | When crawled |
 
 #### `comments`
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `question_id` | UUID | Foreign key → questions |
-| `comment_id` | STRING | Unique per platform |
-| `content` | TEXT | Comment text |
-| `author` | STRING | Username |
-| `upvotes` | INTEGER | Score/upvotes |
-| `created_at` | TIMESTAMP | Comment date |
+| id | UUID | Primary key |
+| question_id | UUID | Foreign key → questions |
+| comment_id | STRING | Unique per platform |
+| content | TEXT | Comment text |
+| author | STRING | Username |
+| upvotes | INTEGER | Score/upvotes |
+| created_at | TIMESTAMP | Comment date |
 
 #### `agent_responses`
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `question_id` | UUID | Foreign key → questions |
-| `is_in_scope` | BOOLEAN | Can agent answer? |
-| `confidence_score` | FLOAT | Agent confidence |
-| `workflow_link` | STRING | Link to workflow |
-| `response_text` | TEXT | Generated response |
-| `posted` | BOOLEAN | Posted successfully? |
-| `posted_at` | TIMESTAMP | When posted |
-| `created_at` | TIMESTAMP | Response generated |
+| id | UUID | Primary key |
+| question_id | UUID | Foreign key → questions |
+| is_in_scope | BOOLEAN | Can agent answer? |
+| confidence_score | FLOAT | Agent confidence |
+| workflow_link | STRING | Link to workflow |
+| response_text | TEXT | Generated response |
+| posted | BOOLEAN | Posted successfully? |
+| posted_at | TIMESTAMP | When posted |
+| created_at | TIMESTAMP | Response generated |
 
 #### `crawl_logs`
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `platform` | STRING | Platform name |
-| `status` | ENUM | success, failure |
-| `items_found` | INTEGER | Questions found |
-| `error_message` | TEXT | Error details |
-| `started_at` | TIMESTAMP | Crawl start time |
-| `completed_at` | TIMESTAMP | Crawl end time |
+| id | UUID | Primary key |
+| platform | STRING | Platform name |
+| status | ENUM | success, failure |
+| items_found | INTEGER | Questions found |
+| items_stored | INTEGER | Questions stored |
+| error_message | TEXT | Error details |
+| started_at | TIMESTAMP | Crawl start time |
+| completed_at | TIMESTAMP | Crawl end time |
+
+---
 
 ## System Workflow
 
-```mermaid
-graph TD
-    A[Scheduled Crawler] --> B[Fetch Questions from Platforms]
-    B --> C{Duplicate Check}
-    C -->|New| D[Store in Supabase]
-    C -->|Exists| E[Skip]
-    D --> F[Queue for Processing]
-    F --> G[Mulan Agent Analysis]
-    G --> H{In Scope?}
-    H -->|Yes| I[Generate Response with Workflow Link]
-    H -->|No| J[Mark as Ignored]
-    I --> K[Post Response to Platform]
-    K --> L[Update Database Status]
-    L --> M[Log Result]
+```
+┌─────────────────────┐
+│  Scheduled Crawler  │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Fetch Questions from│
+│    Platforms        │
+└──────────┬──────────┘
+           │
+           ▼
+      ┌────────┐
+      │Duplicate│  ──Yes──▶ Skip
+      │ Check? │
+      └────┬───┘
+           │ No
+           ▼
+┌─────────────────────┐
+│  Store in Supabase  │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Queue for Processing│
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Mulan Agent Analysis│
+└──────────┬──────────┘
+           │
+           ▼
+      ┌────────┐
+      │In Scope?│
+      └────┬───┘
+       Yes │ No
+           │  └──▶ Mark Ignored
+           ▼
+┌─────────────────────┐
+│Generate Response +  │
+│  Workflow Link      │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Post to Platform    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Update Database     │
+│   & Log Result      │
+└─────────────────────┘
 ```
 
-### Phases
+---
 
-1. **Crawling Phase**
-   - Scheduled tasks run every X hours
-   - Crawlers fetch new questions from each platform
-   - Deduplication check against existing posts
-   - Store questions + comments in Supabase
+## API Endpoints
 
-2. **Processing Phase**
-   - Celery worker picks up new questions
-   - Send question to Mulan Agent API
-   - Agent determines if question is in scope
-   - If yes: generate response with workflow link
+### Questions
+- `GET /api/questions` - List questions (with filters)
+- `GET /api/questions/{id}` - Get specific question
+- `PATCH /api/questions/{id}` - Update question status
+- `GET /api/questions/{id}/comments` - Get comments
 
-3. **Response Phase**
-   - Format response according to platform requirements
-   - Post response via platform API
-   - Update database with response status
-   - Log success/failure
+### Responses
+- `GET /api/responses/{question_id}` - Get agent response
+- `POST /api/responses/{question_id}/generate` - Generate response
+- `POST /api/responses/{question_id}/post` - Post response
 
-4. **Monitoring Phase**
-   - View crawling statistics via dashboard
-   - Review pending questions
-   - Manual approval workflow (optional)
-   - Performance analytics
+### Crawling
+- `POST /api/crawl/trigger` - Manual crawl (specific platform)
+- `POST /api/crawl/trigger-all` - Crawl all platforms
+- `POST /api/crawl/reddit` - Reddit-only crawl
+- `POST /api/crawl/quora` - Quora-only crawl
 
-## Prerequisites
+### Analytics
+- `GET /api/analytics` - Overall statistics
+- `GET /api/analytics/crawl-logs` - Recent crawl logs
 
-- Python 3.11+
-- Node.js 18+ (for frontend)
-- Docker & Docker Compose
-- Redis 7+
-- Supabase account (or PostgreSQL 14+)
-- Platform API credentials:
-  - Reddit API key
-  - Quora credentials (if using their API)
-- Mulan Agent API endpoint and credentials
+### Health
+- `GET /health` - Health check
+- `GET /docs` - Interactive API documentation (Swagger)
 
-## Installation
+---
 
-### 1. Clone the Repository
+## Running the Application
 
+### Development Mode
+
+**With Docker:**
 ```bash
-git clone https://github.com/yourusername/ai-video-qa-system.git
-cd ai-video-qa-system
+docker-compose up
 ```
 
-### 2. Backend Setup
-
+**Without Docker:**
 ```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 3. Frontend Setup (Optional)
-
-```bash
-cd frontend
-npm install
-```
-
-### 4. Docker Setup
-
-```bash
-# Start all services
-docker-compose up -d
-```
-
-## Configuration
-
-### 1. Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```env
-# Database
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-REDIS_URL=redis://localhost:6379
-
-# Reddit API
-REDDIT_CLIENT_ID=your_reddit_client_id
-REDDIT_CLIENT_SECRET=your_reddit_secret
-REDDIT_USER_AGENT=your_app_name
-
-# Quora (if using official API)
-QUORA_API_KEY=your_quora_key
-
-# Mulan Agent
-MULAN_AGENT_URL=https://mulan-agent.example.com
-MULAN_AGENT_API_KEY=your_mulan_key
-
-# Celery
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
-
-# Monitoring
-SENTRY_DSN=your_sentry_dsn
-
-# Rate Limiting
-CRAWL_INTERVAL_HOURS=6
-MAX_REQUESTS_PER_MINUTE=30
-```
-
-### 2. Initialize Database
-
-```bash
-python scripts/setup_db.py
-```
-
-## Usage
-
-### Start the Crawler
-
-```bash
-# Start Celery worker
-celery -A backend.tasks.celery_app worker --loglevel=info
-
-# Start Celery beat (scheduler)
-celery -A backend.tasks.celery_app beat --loglevel=info
-```
-
-### Start the API Server
-
-```bash
+# Start from backend directory
 cd backend
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Start the Frontend Dashboard
-
-```bash
-cd frontend
-npm run dev
-```
-
-Access the dashboard at `http://localhost:3000`
-
-### Manual Crawl Trigger
-
-```bash
-# Trigger Reddit crawl
-curl -X POST http://localhost:8000/api/crawl/reddit
-
-# Trigger Quora crawl
-curl -X POST http://localhost:8000/api/crawl/quora
-```
-
-## Development
-
-### Run Tests
-
-```bash
-# Backend tests
-cd backend
-pytest
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-### Code Quality
-
-```bash
-# Linting
-flake8 backend/
-pylint backend/
-
-# Formatting
-black backend/
-isort backend/
-
-# Type checking
-mypy backend/
-```
-
-### Adding a New Platform Crawler
-
-1. Create new crawler in `backend/crawler/`
-2. Inherit from `BaseCrawler`
-3. Implement required methods: `fetch_questions()`, `fetch_comments()`
-4. Register in `crawler_manager.py`
-5. Add platform credentials to `.env`
-
-## Deployment
-
-### Using Docker Compose
+### Production Mode
 
 ```bash
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### Cloud Deployment
+### Useful Commands
 
-**Backend (Cloud Run / ECS)**
 ```bash
-# Build and push image
-docker build -t gcr.io/your-project/ai-video-qa-backend:latest ./backend
-docker push gcr.io/your-project/ai-video-qa-backend:latest
+# View logs
+docker-compose logs -f api
+docker-compose logs -f celery_worker
+
+# Stop services
+docker-compose down
+
+# Rebuild after changes
+docker-compose up -d --build
+
+# Seed test data
+python scripts/seed_data.py
+
+# Run tests
+pytest tests/
+
+# View Celery monitoring
+open http://localhost:5555
+```
+
+---
+
+## Testing
+
+### Run Tests
+```bash
+cd backend
+pytest tests/ -v
+```
+
+### Test Coverage
+```bash
+pytest tests/ --cov=backend --cov-report=html
+```
+
+### Manual Testing
+```bash
+# Test crawl
+curl -X POST http://localhost:8000/api/crawl/reddit
+
+# Check results
+curl http://localhost:8000/api/questions | jq
+
+# View analytics
+curl http://localhost:8000/api/analytics | jq
+```
+
+---
+
+## Deployment
+
+### Using Docker
+
+**Backend (Cloud Run / AWS ECS):**
+```bash
+docker build -t your-registry/mulan-backend:latest ./backend
+docker push your-registry/mulan-backend:latest
 
 # Deploy to Cloud Run
-gcloud run deploy ai-video-qa-backend \
-  --image gcr.io/your-project/ai-video-qa-backend:latest \
+gcloud run deploy mulan-backend \
+  --image your-registry/mulan-backend:latest \
   --platform managed \
   --region us-central1
 ```
 
-**Frontend (Vercel)**
+**Frontend (Vercel):**
 ```bash
 cd frontend
 vercel --prod
 ```
 
-## Development Phases
+### Environment Variables for Production
 
-- [x] **Phase 1**: Core crawler + database setup
-- [ ] **Phase 2**: Mulan Agent integration
-- [ ] **Phase 3**: Auto-response system
-- [ ] **Phase 4**: Monitoring dashboard
-- [ ] **Phase 5**: Testing & deployment
+Create `.env.production` with:
+- Production database credentials
+- Production API keys
+- `ENVIRONMENT=production`
+- `AUTO_POST_ENABLED=true` (after testing)
+- Higher rate limits if needed
+
+---
+
+## Important Notes
+
+### Before Enabling Auto-Posting
+
+1. ✅ Test crawling manually
+2. ✅ Review generated responses
+3. ✅ Verify keyword filtering works
+4. ✅ Check platform compliance
+5. ✅ Set `AUTO_POST_ENABLED=false` initially
+6. ✅ Monitor first 24 hours closely
+
+### Platform Compliance
+
+**Reddit:**
+- Follow subreddit self-promotion rules
+- Disclose affiliation
+- Add value before promoting
+- Respect rate limits
+
+**Quora:**
+- More strict on automation
+- Manual posting may be safer
+- Focus on providing value
+
+### Security
+
+- Use service role keys in production
+- Enable Row Level Security in Supabase
+- Never commit `.env` files
+- Use secrets management in production
+- Set up HTTPS/SSL
+
+---
+
+## Troubleshooting
+
+**Import Errors:**
+```bash
+# Make sure you're running from correct directory
+cd backend
+uvicorn api.main:app --reload
+```
+
+**No Questions Found:**
+- Check keyword filters (may be too restrictive)
+- Verify Reddit credentials
+- Check subreddit selection
+- Review logs
+
+**Mulan Agent Errors:**
+- Verify API endpoint URL
+- Check API key validity
+- Update API integration code
+- Test with curl first
+
+**Database Connection Issues:**
+- Verify Supabase URL and key
+- Check network connectivity
+- Review Row Level Security policies
+
+---
 
 ## Contributing
 
@@ -432,15 +593,19 @@ vercel --prod
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+---
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
+
+---
 
 ## Support
 
-For questions or issues:
-- Open an issue on GitHub
-- Contact: your-email@example.com
+For questions or issues, please open an issue on GitHub.
+
+---
 
 ## Acknowledgments
 

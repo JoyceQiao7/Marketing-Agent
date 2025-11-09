@@ -6,6 +6,10 @@ import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from pathlib import Path
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -62,7 +66,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     
     class Config:
-        env_file = ".env"
+        env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = False
 
 

@@ -1,13 +1,17 @@
 """
 Celery application configuration.
 """
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from celery import Celery
 from celery.schedules import crontab
 from backend.config.settings import settings
 from backend.utils.logger import log
 
-
-# Initialize Celery
 celery_app = Celery(
     "mulan_marketing_agent",
     broker=settings.celery_broker_url,

@@ -104,6 +104,20 @@ services:
       - ./backend:/app
     command: celery -A backend.tasks.celery_app flower --port=5555
 
+  # Frontend dashboard (optional)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mulan-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   redis_data:
 

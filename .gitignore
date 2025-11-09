@@ -9,6 +9,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+backend/venv/
+backend/__pycache__/
 
 # Distribution / packaging
 .Python

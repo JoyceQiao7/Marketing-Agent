@@ -2,6 +2,7 @@
 Centralized logging configuration using loguru.
 """
 import sys
+from pathlib import Path
 from loguru import logger
 from backend.config.settings import settings
 
@@ -20,8 +21,10 @@ def setup_logger():
     )
     
     # Add file handler for persistent logs
+    log_dir = Path(__file__).parent.parent.parent / "logs"
+    log_dir.mkdir(exist_ok=True)
     logger.add(
-        "logs/mulan_agent_{time:YYYY-MM-DD}.log",
+        str(log_dir / "mulan_agent_{time:YYYY-MM-DD}.log"),
         rotation="500 MB",
         retention="10 days",
         level=settings.log_level,
