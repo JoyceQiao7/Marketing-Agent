@@ -1,6 +1,6 @@
-# Mulan-Marketing-Agent
+# Marketing-Agent
 
-An automated system that crawls social media platforms (Quora, Reddit, etc.) for AI video-related questions, stores them in a database, processes them through an AI agent (Mulan Agent) to determine if they're answerable, and automatically posts responses with workflow links.
+An automated system that crawls social media platforms (Quora, Reddit, etc.) for AI video-related questions, stores them in a database, processes them through an AI agent to determine if they're answerable, and automatically posts responses with workflow links.
 
 ## Table of Contents
 
