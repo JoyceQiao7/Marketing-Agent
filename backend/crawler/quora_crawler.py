@@ -1,8 +1,8 @@
 """
-Quora-specific crawler implementation using Selenium.
+Quora-specific crawler implementation using Selenium with multi-market support.
 Note: Quora doesn't have an official API, so we use web scraping with Selenium.
 """
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import time
 from selenium import webdriver
@@ -15,21 +15,45 @@ from webdriver_manager.chrome import ChromeDriverManager
 from backend.crawler.base_crawler import BaseCrawler
 from backend.database.models import QuestionCreate, Comment, PlatformEnum
 from backend.config.settings import settings
+from backend.config.markets import get_market_config
 from backend.utils.logger import log
 from backend.utils.deduplicator import Deduplicator
 
 
 class QuoraCrawler(BaseCrawler):
-    """Crawler for Quora platform using Selenium."""
+    """Crawler for Quora platform using Selenium with market-specific configuration."""
     
-    def __init__(self):
-        """Initialize Quora crawler."""
+    def __init__(self, market_name: Optional[str] = None):
+        """
+        Initialize Quora crawler.
+        
+        Args:
+            market_name: Optional market segment to configure crawler for
+        """
         super().__init__("quora")
         self.deduplicator = Deduplicator()
-        self.topics = [t.strip() for t in settings.quora_topics.split(',')]
+        self.market_name = market_name
+        self.market_config = None
         self.driver = None
         
-        log.info(f"Quora crawler initialized for topics: {self.topics}")
+        # Load market configuration if specified
+        if market_name:
+            self.market_config = get_market_config(market_name)
+            if self.market_config and self.market_config.quora:
+                self.topics = self.market_config.quora.topics or []
+                self.keywords = self.market_config.quora.keywords or []
+                log.info(f"Quora crawler initialized for market '{market_name}' with topics: {self.topics}")
+            else:
+                log.warning(f"No Quora config found for market '{market_name}', using defaults")
+                self._use_defaults()
+        else:
+            self._use_defaults()
+    
+    def _use_defaults(self):
+        """Use default configuration from settings."""
+        self.topics = [t.strip() for t in settings.quora_topics.split(',')]
+        self.keywords = []
+        log.info(f"Quora crawler initialized with default topics: {self.topics}")
     
     def _init_driver(self):
         """Initialize Selenium WebDriver."""
@@ -151,6 +175,7 @@ class QuoraCrawler(BaseCrawler):
                         content=question_text,
                         author="unknown",  # Requires additional scraping
                         url=question_url,
+                        market=self.market_name or "general_video",  # Default market if not specified
                         tags=[],
                         upvotes=0,  # Requires additional scraping
                         created_at=datetime.utcnow()  # Actual date requires additional scraping

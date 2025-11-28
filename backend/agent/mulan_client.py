@@ -1,14 +1,15 @@
 """
-Client for communicating with Mulan Agent API.
+Client for communicating with Mulan Agent API with multi-market support.
 """
 from typing import Dict, Optional
 import httpx
 from backend.config.settings import settings
+from backend.config.markets import get_market_config, get_workflow_link_for_context
 from backend.utils.logger import log
 
 
 class MulanClient:
-    """Client to interact with Mulan Agent API."""
+    """Client to interact with Mulan Agent API with market-aware context."""
     
     def __init__(self):
         """Initialize Mulan Agent client."""
@@ -18,13 +19,19 @@ class MulanClient:
         
         log.info(f"Mulan Agent client initialized: {self.base_url}")
     
-    async def analyze_question(self, question_text: str, question_title: str = "") -> Dict:
+    async def analyze_question(
+        self, 
+        question_text: str, 
+        question_title: str = "",
+        market: Optional[str] = None
+    ) -> Dict:
         """
-        Send question to Mulan Agent for analysis.
+        Send question to Mulan Agent for analysis with market context.
         
         Args:
             question_text: The question content
             question_title: The question title (optional)
+            market: Market segment name for context
             
         Returns:
             Dictionary with analysis results:
@@ -36,6 +43,18 @@ class MulanClient:
             }
         """
         try:
+            # Get market configuration for context
+            market_context = {}
+            if market:
+                market_config = get_market_config(market)
+                if market_config:
+                    market_context = {
+                        "market": market,
+                        "tone": market_config.tone,
+                        "target_pain": market_config.target_pain,
+                        "mulan_context": market_config.mulan_context
+                    }
+            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {
                     "Authorization": f"Bearer {self.api_key}",
@@ -45,10 +64,11 @@ class MulanClient:
                 payload = {
                     "question": question_text,
                     "title": question_title,
-                    "task": "analyze_capability"
+                    "task": "analyze_capability",
+                    "market_context": market_context  # Send market context to AI
                 }
                 
-                log.info(f"Sending question to Mulan Agent: {question_title[:50]}...")
+                log.info(f"Sending question to Mulan Agent (market: {market}): {question_title[:50]}...")
                 
                 response = await client.post(
                     f"{self.base_url}/api/analyze",
@@ -59,7 +79,7 @@ class MulanClient:
                 response.raise_for_status()
                 result = response.json()
                 
-                log.info(f"Received response from Mulan Agent: in_scope={result.get('is_in_scope')}")
+                log.info(f"Received response from Mulan Agent: in_scope={result.get('is_in_scope')}, confidence={result.get('confidence_score')}")
                 
                 return result
                 
@@ -80,12 +100,18 @@ class MulanClient:
                 "error": str(e)
             }
     
-    async def generate_response(self, question_text: str, workflow_id: Optional[str] = None) -> Dict:
+    async def generate_response(
+        self, 
+        question_text: str, 
+        market: Optional[str] = None,
+        workflow_id: Optional[str] = None
+    ) -> Dict:
         """
-        Generate a response for a question using Mulan Agent.
+        Generate a response for a question using Mulan Agent with market-specific tone.
         
         Args:
             question_text: The question to answer
+            market: Market segment for tone and context
             workflow_id: Optional specific workflow ID to use
             
         Returns:
@@ -97,6 +123,21 @@ class MulanClient:
             }
         """
         try:
+            # Get market configuration for context
+            market_context = {}
+            tone = "helpful, professional"
+            
+            if market:
+                market_config = get_market_config(market)
+                if market_config:
+                    tone = market_config.tone
+                    market_context = {
+                        "market": market,
+                        "tone": tone,
+                        "target_pain": market_config.target_pain,
+                        "mulan_context": market_config.mulan_context
+                    }
+            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {
                     "Authorization": f"Bearer {self.api_key}",
@@ -106,10 +147,12 @@ class MulanClient:
                 payload = {
                     "question": question_text,
                     "workflow_id": workflow_id,
-                    "task": "generate_response"
+                    "task": "generate_response",
+                    "market_context": market_context,
+                    "tone": tone  # Market-specific tone
                 }
                 
-                log.info("Generating response from Mulan Agent...")
+                log.info(f"Generating response from Mulan Agent (market: {market}, tone: {tone})...")
                 
                 response = await client.post(
                     f"{self.base_url}/api/generate",
@@ -182,4 +225,3 @@ class MulanClient:
 
 # Global instance
 mulan_client = MulanClient()
-

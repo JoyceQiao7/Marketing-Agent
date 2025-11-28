@@ -1,90 +1,167 @@
-# Makefile for Mulan Marketing Agent
+# Mulan Marketing Agent - Makefile
+# Quick commands for development and deployment
 
-.PHONY: help install setup-db dev up down logs test lint format clean
+.PHONY: help setup install clean test lint format run-api run-worker run-beat run-frontend docker-up docker-down
 
-help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo ''
-	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+# Default target
+help:
+	@echo "🚀 Mulan Marketing Agent - Available Commands"
+	@echo "=============================================="
+	@echo ""
+	@echo "Setup & Installation:"
+	@echo "  make setup          - Complete setup (backend + frontend)"
+	@echo "  make install        - Install all dependencies"
+	@echo "  make clean          - Remove generated files and caches"
+	@echo ""
+	@echo "Development:"
+	@echo "  make run-api        - Start FastAPI server"
+	@echo "  make run-worker     - Start Celery worker"
+	@echo "  make run-beat       - Start Celery beat scheduler"
+	@echo "  make run-frontend   - Start Next.js dev server"
+	@echo "  make run-all        - Start all services (requires tmux)"
+	@echo ""
+	@echo "Testing & Quality:"
+	@echo "  make test           - Run all tests"
+	@echo "  make lint           - Run linters"
+	@echo "  make format         - Format code"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-up      - Start all services in Docker"
+	@echo "  make docker-down    - Stop all Docker services"
+	@echo "  make docker-rebuild - Rebuild and restart Docker services"
+	@echo ""
+	@echo "CLI:"
+	@echo "  make markets        - List all configured markets"
+	@echo "  make crawl          - Trigger test crawl (specify MARKET=name)"
+	@echo "  make leads          - Show leads (specify MARKET=name)"
+	@echo ""
 
-install: ## Install Python dependencies
+# Setup
+setup:
+	@echo "🔧 Running setup script..."
+	@bash setup.sh
+
+install:
+	@echo "📦 Installing backend dependencies..."
 	cd backend && pip install -r requirements.txt
+	@echo "📦 Installing frontend dependencies..."
+	cd frontend && npm install
+	@echo "✅ Installation complete!"
 
-setup-db: ## Show database setup instructions
-	@echo "Run this SQL in your Supabase SQL Editor:"
-	@cat scripts/schema.sql
+# Clean
+clean:
+	@echo "🧹 Cleaning up..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name ".coverage" -delete
+	rm -rf backend/htmlcov
+	rm -rf frontend/.next
+	rm -rf frontend/out
+	@echo "✅ Cleanup complete!"
 
-dev: ## Start development environment (Docker)
-	docker-compose up
+# Development
+run-api:
+	@echo "🚀 Starting FastAPI server..."
+	cd backend && uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
-up: ## Start services in background
+run-worker:
+	@echo "⚙️  Starting Celery worker..."
+	cd backend && celery -A tasks.celery_app worker --loglevel=info
+
+run-beat:
+	@echo "⏰ Starting Celery beat..."
+	cd backend && celery -A tasks.celery_app beat --loglevel=info
+
+run-frontend:
+	@echo "🎨 Starting Next.js frontend..."
+	cd frontend && npm run dev
+
+run-all:
+	@echo "🚀 Starting all services with tmux..."
+	@command -v tmux >/dev/null 2>&1 || { echo "❌ tmux is required but not installed."; exit 1; }
+	tmux new-session -d -s mulan 'cd backend && uvicorn api.main:app --reload' \; \
+		split-window -v 'cd backend && celery -A tasks.celery_app worker -l info' \; \
+		split-window -h 'cd backend && celery -A tasks.celery_app beat -l info' \; \
+		select-pane -t 0 \; \
+		split-window -h 'cd frontend && npm run dev' \; \
+		attach-session -t mulan
+
+# Testing
+test:
+	@echo "🧪 Running tests..."
+	cd backend && pytest tests/ -v --cov=backend --cov-report=html
+	@echo "✅ Tests complete! Coverage report: backend/htmlcov/index.html"
+
+lint:
+	@echo "🔍 Running linters..."
+	cd backend && flake8 . --max-line-length=120 --exclude=venv,__pycache__
+	cd backend && mypy . --ignore-missing-imports
+	@echo "✅ Linting complete!"
+
+format:
+	@echo "✨ Formatting code..."
+	cd backend && black . --exclude=venv
+	cd backend && isort . --skip venv
+	@echo "✅ Formatting complete!"
+
+# Docker
+docker-up:
+	@echo "🐳 Starting Docker services..."
 	docker-compose up -d
+	@echo "✅ Docker services running!"
+	@echo "   API: http://localhost:8000"
+	@echo "   Frontend: http://localhost:3000"
+	@echo "   Flower: http://localhost:5555"
 
-down: ## Stop all services
+docker-down:
+	@echo "🛑 Stopping Docker services..."
 	docker-compose down
 
-logs: ## View logs from all services
-	docker-compose logs -f
+docker-rebuild:
+	@echo "🔨 Rebuilding Docker services..."
+	docker-compose down
+	docker-compose up -d --build
+	@echo "✅ Docker services rebuilt!"
 
-logs-api: ## View API logs
-	docker-compose logs -f api
+# CLI Shortcuts
+markets:
+	@cd backend && python -m cli.main markets
 
-logs-worker: ## View Celery worker logs
-	docker-compose logs -f celery_worker
+crawl:
+	@if [ -z "$(MARKET)" ]; then \
+		echo "❌ Please specify MARKET=<name>"; \
+		echo "   Example: make crawl MARKET=indie_authors"; \
+		cd backend && python -m cli.main markets; \
+	else \
+		echo "🔍 Crawling market: $(MARKET)"; \
+		cd backend && python -m cli.main crawl --market $(MARKET) --limit 10; \
+	fi
 
-build: ## Rebuild Docker images
-	docker-compose build
+leads:
+	@if [ -z "$(MARKET)" ]; then \
+		echo "❌ Please specify MARKET=<name>"; \
+		echo "   Example: make leads MARKET=indie_authors"; \
+	else \
+		cd backend && python -m cli.main leads --market $(MARKET) --limit 10; \
+	fi
 
-restart: ## Restart all services
-	docker-compose restart
+stats:
+	@if [ -z "$(MARKET)" ]; then \
+		cd backend && python -m cli.main stats --days 7; \
+	else \
+		cd backend && python -m cli.main stats --market $(MARKET) --days 7; \
+	fi
 
-test: ## Run tests
-	cd backend && pytest tests/ -v
+# Database
+db-migrate:
+	@echo "🗄️  Run this in your Supabase SQL editor:"
+	@echo "   Copy and execute: scripts/schema.sql"
 
-test-cov: ## Run tests with coverage
-	cd backend && pytest tests/ --cov=backend --cov-report=html
-
-lint: ## Run linters
-	cd backend && flake8 .
-	cd backend && mypy .
-
-format: ## Format code with black and isort
-	cd backend && black .
-	cd backend && isort .
-
-clean: ## Clean up temporary files
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	rm -rf .pytest_cache
-	rm -rf htmlcov
-	rm -rf .coverage
-
-seed: ## Seed database with test data
-	python scripts/seed_data.py
-
-crawl-reddit: ## Trigger manual Reddit crawl
-	curl -X POST http://localhost:8000/api/crawl/reddit
-
-crawl-all: ## Trigger manual crawl for all platforms
-	curl -X POST http://localhost:8000/api/crawl/trigger-all
-
-questions: ## List all questions
-	curl http://localhost:8000/api/questions | jq
-
-analytics: ## Show analytics
-	curl http://localhost:8000/api/analytics | jq
-
-health: ## Check API health
-	curl http://localhost:8000/health
-
-docs: ## Open API documentation
-	open http://localhost:8000/docs
-
-flower: ## Open Celery monitoring
-	open http://localhost:5555
-
-shell: ## Open Python shell with context
-	cd backend && python -i -c "from backend.config.settings import settings; from backend.database.supabase_client import db_client; print('Context loaded: settings, db_client')"
-
+# Production
+deploy:
+	@echo "🚀 Deploying to production..."
+	@echo "   1. Build backend: docker build -t mulan-backend ./backend"
+	@echo "   2. Build frontend: cd frontend && npm run build"
+	@echo "   3. Deploy to your cloud provider"

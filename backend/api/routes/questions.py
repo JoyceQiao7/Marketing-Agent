@@ -1,5 +1,5 @@
 """
-Question management API routes.
+Question management API routes with multi-market support.
 """
 from typing import List, Optional
 from uuid import UUID
@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.database.models import Question, QuestionStatus, QuestionUpdate
 from backend.database.supabase_client import SupabaseClient
 from backend.api.dependencies import get_db_client
+from backend.config.markets import get_all_markets, get_market_config
 from backend.utils.logger import log
 
 
@@ -16,15 +17,21 @@ router = APIRouter(prefix="/questions", tags=["questions"])
 @router.get("/", response_model=List[Question])
 async def get_questions(
     status: Optional[QuestionStatus] = None,
+    market: Optional[str] = Query(default=None, description="Filter by market segment"),
+    platform: Optional[str] = Query(default=None, description="Filter by platform"),
+    min_score: Optional[float] = Query(default=None, description="Minimum confidence score"),
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
     db: SupabaseClient = Depends(get_db_client)
 ):
     """
-    Get questions with optional filtering.
+    Get questions with optional filtering by market, status, platform, etc.
     
     Args:
         status: Filter by status
+        market: Filter by market segment (indie_authors, course_creators, etc.)
+        platform: Filter by platform (reddit, quora, etc.)
+        min_score: Minimum confidence score filter
         limit: Maximum number of questions to return
         offset: Offset for pagination
         db: Database client
@@ -33,10 +40,14 @@ async def get_questions(
         List of questions
     """
     try:
-        if status:
-            questions = await db.get_questions_by_status(status, limit)
-        else:
-            questions = await db.get_all_questions(limit, offset)
+        questions = await db.get_questions(
+            status=status,
+            market=market,
+            platform=platform,
+            min_score=min_score,
+            limit=limit,
+            offset=offset
+        )
         
         return questions
         
@@ -134,5 +145,34 @@ async def get_question_comments(
         
     except Exception as e:
         log.error(f"Error fetching comments for question {question_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/markets/list")
+async def get_markets():
+    """
+    Get list of all available market segments.
+    
+    Returns:
+        List of market configurations
+    """
+    try:
+        markets = get_all_markets()
+        market_details = []
+        
+        for market_name in markets:
+            config = get_market_config(market_name)
+            if config:
+                market_details.append({
+                    "name": config.name,
+                    "description": config.description,
+                    "platforms": config.platforms,
+                    "crawl_interval_hours": config.crawl_interval_hours
+                })
+        
+        return market_details
+        
+    except Exception as e:
+        log.error(f"Error fetching markets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

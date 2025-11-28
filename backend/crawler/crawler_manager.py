@@ -1,49 +1,106 @@
 """
-Crawler manager to orchestrate all platform crawlers.
+Crawler manager to orchestrate all platform crawlers with multi-market support.
 """
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 from backend.crawler.reddit_crawler import RedditCrawler
 from backend.crawler.quora_crawler import QuoraCrawler
 from backend.database.models import QuestionCreate, CrawlLog, CrawlStatus, PlatformEnum
 from backend.database.supabase_client import db_client
+from backend.config.markets import get_market_config, get_all_markets
 from backend.utils.logger import log
 from backend.utils.deduplicator import Deduplicator
 
 
 class CrawlerManager:
-    """Manage and coordinate all platform crawlers."""
+    """Manage and coordinate all platform crawlers with market segmentation."""
     
     def __init__(self):
-        """Initialize crawler manager with all platform crawlers."""
-        self.crawlers = {
-            "reddit": RedditCrawler(),
-            "quora": QuoraCrawler()
-        }
+        """Initialize crawler manager."""
         self.deduplicator = Deduplicator()
         log.info("Crawler manager initialized")
     
-    async def crawl_platform(self, platform: str, limit: int = 100) -> Dict[str, any]:
+    def get_crawler(self, platform: str, market: Optional[str] = None):
         """
-        Crawl a specific platform.
+        Get crawler instance for specific platform and market.
+        
+        Args:
+            platform: Platform name (reddit, quora, etc.)
+            market: Market segment name
+            
+        Returns:
+            Crawler instance or None
+        """
+        if platform == "reddit":
+            return RedditCrawler(market_name=market)
+        elif platform == "quora":
+            return QuoraCrawler(market_name=market)
+        else:
+            log.error(f"Unknown platform: {platform}")
+            return None
+    
+    async def crawl_market(self, market: str, limit: int = 100) -> Dict[str, any]:
+        """
+        Crawl all platforms for a specific market.
+        
+        Args:
+            market: Market segment name
+            limit: Maximum questions to fetch per platform
+            
+        Returns:
+            Dictionary with crawl results
+        """
+        market_config = get_market_config(market)
+        if not market_config:
+            log.error(f"Unknown market: {market}")
+            return {"error": f"Unknown market: {market}"}
+        
+        log.info(f"Starting market crawl for '{market}' across {len(market_config.platforms)} platforms")
+        
+        results = []
+        total_stored = 0
+        total_found = 0
+        
+        for platform in market_config.platforms:
+            result = await self.crawl_platform(platform, market, limit)
+            results.append(result)
+            
+            if 'items_stored' in result:
+                total_stored += result['items_stored']
+            if 'items_found' in result:
+                total_found += result['items_found']
+        
+        log.info(f"Market crawl complete for '{market}': {total_stored} stored from {total_found} found")
+        
+        return {
+            "market": market,
+            "total_found": total_found,
+            "total_stored": total_stored,
+            "platforms": results
+        }
+    
+    async def crawl_platform(self, platform: str, market: Optional[str] = None, limit: int = 100) -> Dict[str, any]:
+        """
+        Crawl a specific platform for a specific market.
         
         Args:
             platform: Platform name (reddit, quora)
+            market: Market segment name (optional)
             limit: Maximum questions to fetch
             
         Returns:
             Dictionary with crawl results
         """
-        if platform not in self.crawlers:
-            log.error(f"Unknown platform: {platform}")
+        crawler = self.get_crawler(platform, market)
+        if not crawler:
             return {"error": f"Unknown platform: {platform}"}
         
-        crawler = self.crawlers[platform]
         started_at = datetime.utcnow()
         
         # Create crawl log
         log_entry = CrawlLog(
             platform=platform,
+            market=market,
             status=CrawlStatus.SUCCESS,
             items_found=0,
             items_stored=0,
@@ -52,7 +109,7 @@ class CrawlerManager:
         
         try:
             # Fetch questions
-            log.info(f"Starting crawl for {platform}")
+            log.info(f"Starting crawl for {platform}" + (f" (market: {market})" if market else ""))
             questions = await crawler.crawl(limit)
             
             log_entry.items_found = len(questions)
@@ -62,7 +119,7 @@ class CrawlerManager:
             duplicate_count = 0
             
             for question in questions:
-                # Check for duplicates
+                # Check for duplicates by post_id
                 exists = await db_client.check_question_exists(
                     question.platform.value,
                     question.post_id
@@ -93,10 +150,12 @@ class CrawlerManager:
             # Save crawl log
             await db_client.create_crawl_log(log_entry)
             
-            log.info(f"Crawl complete for {platform}: {stored_count} stored, {duplicate_count} duplicates")
+            log.info(f"Crawl complete for {platform}" + (f" (market: {market})" if market else "") + 
+                    f": {stored_count} stored, {duplicate_count} duplicates")
             
             return {
                 "platform": platform,
+                "market": market,
                 "items_found": len(questions),
                 "items_stored": stored_count,
                 "duplicates": duplicate_count,
@@ -104,7 +163,7 @@ class CrawlerManager:
             }
             
         except Exception as e:
-            log.error(f"Error crawling {platform}: {e}")
+            log.error(f"Error crawling {platform}" + (f" (market: {market})" if market else "") + f": {e}")
             
             log_entry.status = CrawlStatus.FAILURE
             log_entry.error_message = str(e)
@@ -114,12 +173,32 @@ class CrawlerManager:
             
             return {
                 "platform": platform,
+                "market": market,
                 "error": str(e)
             }
     
+    async def crawl_all_markets(self, limit: int = 100) -> List[Dict[str, any]]:
+        """
+        Crawl all configured markets.
+        
+        Args:
+            limit: Maximum questions to fetch per platform per market
+            
+        Returns:
+            List of crawl results per market
+        """
+        markets = get_all_markets()
+        results = []
+        
+        for market in markets:
+            result = await self.crawl_market(market, limit)
+            results.append(result)
+        
+        return results
+    
     async def crawl_all_platforms(self, limit: int = 100) -> List[Dict[str, any]]:
         """
-        Crawl all configured platforms.
+        Crawl all platforms without market filtering (backwards compatibility).
         
         Args:
             limit: Maximum questions to fetch per platform
@@ -128,26 +207,14 @@ class CrawlerManager:
             List of crawl results
         """
         results = []
+        platforms = ["reddit", "quora"]
         
-        for platform in self.crawlers.keys():
-            result = await self.crawl_platform(platform, limit)
+        for platform in platforms:
+            result = await self.crawl_platform(platform, market=None, limit=limit)
             results.append(result)
         
         return results
-    
-    def get_crawler(self, platform: str):
-        """
-        Get crawler for specific platform.
-        
-        Args:
-            platform: Platform name
-            
-        Returns:
-            Crawler instance or None
-        """
-        return self.crawlers.get(platform)
 
 
 # Global instance
 crawler_manager = CrawlerManager()
-

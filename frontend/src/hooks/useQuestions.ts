@@ -1,11 +1,20 @@
 /**
- * Custom hook for fetching and managing questions
+ * Custom hook for fetching and managing questions with multi-market support
  */
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
 import { Question } from '@/lib/types';
 
-export function useQuestions(status?: string, autoRefresh: boolean = false) {
+interface UseQuestionsParams {
+  status?: string;
+  market?: string;
+  platform?: string;
+  min_score?: number;
+  limit?: number;
+  autoRefresh?: boolean;
+}
+
+export function useQuestions(params?: UseQuestionsParams) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +23,13 @@ export function useQuestions(status?: string, autoRefresh: boolean = false) {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiClient.getQuestions(status);
+      const data = await apiClient.getQuestions({
+        status: params?.status,
+        market: params?.market,
+        platform: params?.platform,
+        min_score: params?.min_score,
+        limit: params?.limit || 100,
+      });
       setQuestions(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch questions');
@@ -26,12 +41,11 @@ export function useQuestions(status?: string, autoRefresh: boolean = false) {
   useEffect(() => {
     fetchQuestions();
 
-    if (autoRefresh) {
+    if (params?.autoRefresh) {
       const interval = setInterval(fetchQuestions, 30000); // Refresh every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [status, autoRefresh]);
+  }, [params?.status, params?.market, params?.platform, params?.min_score, params?.autoRefresh]);
 
   return { questions, loading, error, refetch: fetchQuestions };
 }
-

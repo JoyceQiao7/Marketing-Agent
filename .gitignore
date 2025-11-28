@@ -55,6 +55,7 @@ pip-delete-this-directory.txt
 .env.local
 .env.production
 .env.*.local
+.env.example
 
 # IDEs
 .vscode/
@@ -91,14 +92,21 @@ dump.rdb
 .dmypy.json
 dmypy.json
 
-# Node (if frontend)
+# Node (Frontend)
 node_modules/
 .next/
 out/
 .cache/
 .parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Build outputs
 dist/
 build/
 
+# Temporary files
+*.tmp
+*.temp
+.DS_Store

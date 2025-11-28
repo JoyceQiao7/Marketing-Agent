@@ -24,12 +24,19 @@ export default function QuestionCard({ question, onViewDetails }: QuestionCardPr
     other: 'bg-gray-500',
   };
 
+  const formatMarket = (market: string) => {
+    return market.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
           <span className={`${platformColors[question.platform]} text-white px-3 py-1 rounded-full text-xs font-medium uppercase`}>
             {question.platform}
+          </span>
+          <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-medium">
+            📊 {formatMarket(question.market)}
           </span>
           <span className={`${statusColors[question.status]} px-3 py-1 rounded-full text-xs font-medium capitalize`}>
             {question.status}

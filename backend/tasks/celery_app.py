@@ -1,5 +1,5 @@
 """
-Celery application configuration.
+Celery application configuration with multi-market scheduling.
 """
 import sys
 from pathlib import Path
@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from celery import Celery
 from celery.schedules import crontab
 from backend.config.settings import settings
+from backend.config.markets import get_all_markets, get_market_config
 from backend.utils.logger import log
 
 celery_app = Celery(
@@ -36,19 +37,35 @@ celery_app.conf.update(
     worker_max_tasks_per_child=100,
 )
 
-# Configure periodic tasks
-celery_app.conf.beat_schedule = {
-    "crawl-all-platforms": {
-        "task": "backend.tasks.crawl_tasks.scheduled_crawl_all",
-        "schedule": crontab(hour=f"*/{settings.crawl_interval_hours}"),
-        "args": ()
-    },
-    "process-pending-questions": {
-        "task": "backend.tasks.response_tasks.process_pending_questions_task",
-        "schedule": crontab(minute="*/30"),  # Every 30 minutes
-        "args": ()
-    },
+# Configure periodic tasks with per-market schedules
+beat_schedule = {}
+
+# Add scheduled crawl for each market
+markets = get_all_markets()
+for market_name in markets:
+    market_config = get_market_config(market_name)
+    if market_config:
+        # Schedule crawl based on market-specific interval
+        beat_schedule[f"crawl-market-{market_name}"] = {
+            "task": "backend.tasks.crawl_tasks.crawl_market_task",
+            "schedule": crontab(hour=f"*/{market_config.crawl_interval_hours}"),
+            "args": (market_name, 100)
+        }
+
+# Add general tasks
+beat_schedule["process-pending-questions"] = {
+    "task": "backend.tasks.response_tasks.process_pending_questions_task",
+    "schedule": crontab(minute="*/30"),  # Every 30 minutes
+    "args": ()
 }
 
-log.info("Celery application configured")
+# Optional: Keep backwards-compatible general crawl
+beat_schedule["crawl-all-platforms-fallback"] = {
+    "task": "backend.tasks.crawl_tasks.scheduled_crawl_all_markets",
+    "schedule": crontab(hour="*/12"),  # Every 12 hours as a fallback
+    "args": ()
+}
 
+celery_app.conf.beat_schedule = beat_schedule
+
+log.info(f"Celery application configured with {len(markets)} market schedules")

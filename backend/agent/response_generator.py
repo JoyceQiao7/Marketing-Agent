@@ -1,5 +1,5 @@
 """
-Response generator for creating and posting responses to questions.
+Response generator for creating and posting market-aware responses to questions.
 """
 from datetime import datetime
 from typing import Optional
@@ -9,11 +9,12 @@ from backend.database.models import Question, AgentResponse, QuestionStatus
 from backend.database.supabase_client import db_client
 from backend.crawler.crawler_manager import crawler_manager
 from backend.config.settings import settings
+from backend.config.markets import get_market_config, get_workflow_link_for_context
 from backend.utils.logger import log
 
 
 class ResponseGenerator:
-    """Generate and post responses to questions."""
+    """Generate and post market-aware responses to questions."""
     
     def __init__(self):
         """Initialize response generator."""
@@ -22,7 +23,7 @@ class ResponseGenerator:
     
     async def generate_response(self, question: Question, agent_response: AgentResponse) -> Optional[str]:
         """
-        Generate a response for a question.
+        Generate a market-aware response for a question.
         
         Args:
             question: Question to answer
@@ -32,14 +33,23 @@ class ResponseGenerator:
             Generated response text or None
         """
         try:
-            log.info(f"Generating response for question: {question.id}")
+            log.info(f"Generating response for question: {question.id} (market: {question.market})")
             
-            # Get workflow link
+            # Get market configuration
+            market_config = get_market_config(question.market)
+            
+            # Select appropriate workflow link based on question content
             workflow_link = agent_response.workflow_link
+            if not workflow_link and market_config:
+                workflow_link = get_workflow_link_for_context(
+                    question.market,
+                    question.content
+                )
             
-            # Generate response using Mulan Agent
+            # Generate response using Mulan Agent with market context
             response_data = await mulan_client.generate_response(
-                question_text=question.content
+                question_text=question.content,
+                market=question.market
             )
             
             response_text = response_data.get("response_text")
@@ -48,20 +58,52 @@ class ResponseGenerator:
                 log.error("Failed to generate response text")
                 return None
             
-            # Add workflow link to response
-            if workflow_link:
-                response_text += f"\n\nCheck out this workflow: {workflow_link}"
+            # Format response with market-specific template
+            formatted_response = self._format_response(
+                response_text=response_text,
+                workflow_link=workflow_link,
+                market=question.market
+            )
             
             # Update agent response with generated text
-            agent_response.response_text = response_text
+            agent_response.response_text = formatted_response
             
             log.info(f"Response generated successfully for question {question.id}")
             
-            return response_text
+            return formatted_response
             
         except Exception as e:
             log.error(f"Error generating response: {e}")
             return None
+    
+    def _format_response(
+        self, 
+        response_text: str, 
+        workflow_link: Optional[str], 
+        market: Optional[str]
+    ) -> str:
+        """
+        Format response with workflow link and disclosure.
+        
+        Args:
+            response_text: Generated response text
+            workflow_link: Workflow URL
+            market: Market segment
+            
+        Returns:
+            Formatted response string
+        """
+        # Start with the AI-generated response
+        formatted = response_text
+        
+        # Add workflow link if available
+        if workflow_link:
+            formatted += f"\n\nYou might find this helpful: {workflow_link}"
+        
+        # Add disclosure (important for transparency and platform compliance)
+        formatted += "\n\n*Disclosure: I work with Mulan AI, which offers tools for creating videos easily.*"
+        
+        return formatted
     
     async def post_response(self, question: Question, response_text: str) -> bool:
         """
@@ -77,8 +119,11 @@ class ResponseGenerator:
         try:
             log.info(f"Posting response to {question.platform} question: {question.id}")
             
-            # Get appropriate crawler
-            crawler = crawler_manager.get_crawler(question.platform.value)
+            # Get appropriate crawler for the platform and market
+            crawler = crawler_manager.get_crawler(
+                question.platform.value,
+                market=question.market
+            )
             
             if not crawler:
                 log.error(f"No crawler found for platform: {question.platform}")
@@ -129,6 +174,15 @@ class ResponseGenerator:
                 await db_client.update_question_status(question_id, QuestionStatus.IGNORED)
                 return False
             
+            # Check confidence threshold (market-specific)
+            market_config = get_market_config(question.market)
+            min_confidence = market_config.min_confidence_score if market_config else settings.min_confidence_score
+            
+            if agent_response.confidence_score < min_confidence:
+                log.info(f"Question {question_id} confidence {agent_response.confidence_score} below threshold {min_confidence}, marking as ignored")
+                await db_client.update_question_status(question_id, QuestionStatus.IGNORED)
+                return False
+            
             # Update status to processing
             await db_client.update_question_status(question_id, QuestionStatus.PROCESSING)
             
@@ -166,24 +220,27 @@ class ResponseGenerator:
             await db_client.update_question_status(question_id, QuestionStatus.ERROR)
             return False
     
-    async def process_pending_questions(self, limit: int = 10) -> int:
+    async def process_pending_questions(self, limit: int = 10, market: Optional[str] = None) -> int:
         """
         Process pending questions that have agent responses.
         
         Args:
             limit: Maximum number of questions to process
+            market: Optional filter by market
             
         Returns:
             Number of questions processed successfully
         """
         try:
-            # Get pending questions
+            # Get pending questions (optionally filtered by market)
             pending_questions = await db_client.get_questions_by_status(
                 QuestionStatus.PENDING,
-                limit=limit
+                limit=limit,
+                market=market
             )
             
-            log.info(f"Processing {len(pending_questions)} pending questions")
+            log.info(f"Processing {len(pending_questions)} pending questions" + 
+                    (f" for market '{market}'" if market else ""))
             
             processed_count = 0
             
@@ -207,4 +264,3 @@ class ResponseGenerator:
 
 # Global instance
 response_generator = ResponseGenerator()
-

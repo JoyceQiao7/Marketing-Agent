@@ -43,6 +43,7 @@ class Question(BaseModel):
     content: str
     author: str
     url: str
+    market: str  # Market segment (indie_authors, course_creators, etc.)
     tags: List[str] = Field(default_factory=list)
     upvotes: int = 0
     status: QuestionStatus = QuestionStatus.PENDING
@@ -59,6 +60,7 @@ class Question(BaseModel):
                 "content": "I want to create videos using AI...",
                 "author": "user123",
                 "url": "https://reddit.com/r/ai/comments/abc123",
+                "market": "course_creators",
                 "tags": ["ai", "video"],
                 "upvotes": 42,
                 "status": "pending"
@@ -118,6 +120,7 @@ class CrawlLog(BaseModel):
     """Log entry for crawl jobs."""
     id: UUID = Field(default_factory=uuid4)
     platform: str
+    market: Optional[str] = None  # Market segment being crawled
     status: CrawlStatus
     items_found: int = 0
     items_stored: int = 0
@@ -148,6 +151,7 @@ class QuestionCreate(BaseModel):
     content: str
     author: str
     url: str
+    market: str  # Market segment
     tags: List[str] = Field(default_factory=list)
     upvotes: int = 0
     created_at: datetime
@@ -179,7 +183,9 @@ class AnalyticsResponse(BaseModel):
     total_questions: int
     questions_by_status: dict
     questions_by_platform: dict
+    questions_by_market: dict  # New: breakdown by market
     total_responses: int
     response_success_rate: float
     avg_confidence_score: float
+    top_markets: List[dict] = Field(default_factory=list)  # Top performing markets
 
